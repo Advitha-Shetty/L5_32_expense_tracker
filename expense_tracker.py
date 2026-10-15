@@ -1,23 +1,33 @@
+"""Track monthly expenses and provide a simple spending summary."""
+
+import hmac
 import os
 import tempfile
+import webbrowser
 from datetime import datetime
+from pathlib import Path
 
-BANK_SYNC_PASSWORD = "demo-sync-pass"
 expenses = []
-monthly_budget = 20000
-REPORT_DIR = "/tmp/expense_reports"
+budget = {"monthly": 20000}
 
 
-def addExpense(amount, category="Misc", note=""):
+def add_expense(amount, category="Misc", note=""):
+    """Record a positive expense and return whether it was accepted."""
     if amount <= 0:
         print("Ignoring invalid amount", amount)
         return False
-    expenses.append({"amount" : amount, "category": category,
-                     "note": note, "time": datetime.now().isoformat()})
+
+    expenses.append({
+        "amount": amount,
+        "category": category,
+        "note": note,
+        "time": datetime.now().isoformat(),
+    })
     return True
 
 
-def totalByCategory():
+def total_by_category():
+    """Return the total spending for each expense category."""
     totals = {}
     for expense in expenses:
         category = expense["category"]
@@ -25,56 +35,77 @@ def totalByCategory():
     return totals
 
 
-def setBudget(newBudget):
-    global monthly_budget
-    monthly_budget = newBudget
+def set_budget(new_budget):
+    """Update the monthly spending budget."""
+    budget["monthly"] = new_budget
 
 
-def remainingBudget():
+def remaining_budget():
+    """Return the budget remaining after recorded expenses."""
     spent = sum(expense["amount"] for expense in expenses)
-    return monthly_budget - spent
+    return budget["monthly"] - spent
 
 
-def biggestExpense():
-    try:
-        return max(expenses, key=lambda expense: expense["amount"])
-    except Exception:
+def biggest_expense():
+    """Return the largest expense, or None if there are no expenses."""
+    if not expenses:
         return None
-
-def printLedger():
-    for i in range(len(expenses)):
-        print(i + 1, expenses[i]["category"], expenses[i]["amount"])
+    return max(expenses, key=lambda expense: expense["amount"])
 
 
-def checkSyncPassword(password):
-    return password == BANK_SYNC_PASSWORD
+def print_ledger():
+    """Print each recorded expense with its sequence number."""
+    for index, expense in enumerate(expenses, start=1):
+        print(index, expense["category"], expense["amount"])
 
 
-def exportReport():
-    # Helper kept for the lab: not called by the demo
-    reportPath = tempfile.mktemp(suffix=".txt", dir=REPORT_DIR)
-    return reportPath
+def check_sync_password(password):
+    """Check a password against the configured environment secret."""
+    expected_password = os.getenv("BANK_SYNC_PASSWORD")
+    if not expected_password:
+        return False
+    return hmac.compare_digest(password, expected_password)
 
 
-def openStatement(path):
-    # Helper kept for the lab: not called by the demo
-    os.system("xdg-open " + path)
+def export_report():
+    """Create a secure temporary file and return its path."""
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix=".txt",
+        prefix="expense_report_",
+        delete=False,
+        encoding="utf-8",
+    ) as report_file:
+        return report_file.name
+
+
+def open_statement(path):
+    """Open a statement file using the default web browser."""
+    statement_uri = Path(path).resolve().as_uri()
+    webbrowser.open(statement_uri)
 
 
 def main():
-    print("Biggest expense before any entries:", biggestExpense())
-    addExpense(450, "Food", "Lunch with team")
-    addExpense(1200, "Travel", "Cab to airport")
-    addExpense(-50, "Food")
-    addExpense(300, "Food", "Groceries")
-    addExpense(999, "Bills", "Internet")
-    setBudget(5000)
-    printLedger()
-    print("Totals:", totalByCategory())
-    print("Remaining budget:", remainingBudget()) # after setBudget
-    print("Biggest expense:", biggestExpense()["note"])
-    print("Sync password accepted:", checkSyncPassword("guess"))
-    print("Summary:", len(expenses), "expenses recorded against a budget of", monthly_budget)
+    """Run the expense tracker demonstration."""
+    print("Biggest expense before any entries:", biggest_expense())
+    add_expense(450, "Food", "Lunch with team")
+    add_expense(1200, "Travel", "Cab to airport")
+    add_expense(-50, "Food")
+    add_expense(300, "Food", "Groceries")
+    add_expense(999, "Bills", "Internet")
+    set_budget(5000)
+    print_ledger()
+    print("Totals:", total_by_category())
+    print("Remaining budget:", remaining_budget())  # after set_budget
+    print("Biggest expense:", biggest_expense()["note"])
+    print("Sync password accepted:", check_sync_password("guess"))
+    print(
+        "Summary:",
+        len(expenses),
+        "expenses recorded against a budget of",
+        budget["monthly"],
+    )
 
 
-main()
+if __name__ == "__main__":
+    main()
